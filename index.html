@@ -131,7 +131,7 @@
         
         let currentSubStep = 0; 
         let isConverged = false;
-
+		let isDrawing = false;
         function resetAll() {
             dataPoints = [];
             centroids = [];
@@ -163,6 +163,8 @@
     // 공통 좌표 처리 함수 (마우스 클릭과 터치 이벤트를 통합 계산)
         function handleInput(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
+			const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
             
             // CSS 크기와 캔버스 내부 해상도 비율 보정 (아이패드 반응형 대응)
             const scaleX = canvas.width / rect.width;
@@ -175,12 +177,17 @@
             const initMode = document.querySelector('input[name="initMode"]:checked').value;
 
             if (clickMode === 'data') {
+				if (isMoveEvent && dataPoints.length > 0) {
+                    const lastPoint = dataPoints[dataPoints.length - 1];
+                    if (Math.hypot(lastPoint.x - x, lastPoint.y - y) < 15) return; 
+                }
                 dataPoints.push({ x: x, y: y, cluster: -1 });
                 currentSubStep = 0;
                 isConverged = false;
                 updateHeader("📍 데이터 추가됨 (단계 진행을 누르면 처음부터 다시 정렬합니다)", "#f1f5f9", "#334155");
                 draw();
             } else {
+				if (isMoveEvent) return;
                 if (centroids.length >= colors.length) {
                     alert("중심점은 최대 5개까지만 지원합니다.");
                     return;
@@ -219,17 +226,27 @@
             }
         }
 
-        // 1. PC 마우스 클릭 이벤트 호환
-        canvas.addEventListener('click', function(e) {
-            handleInput(e.clientX, e.clientY);
-        });
+		// PC 마우스용 이벤트
+        canvas.addEventListener('mousedown', (e) => { isDrawing = true; handleInput(e.clientX, e.clientY, false); });
+        canvas.addEventListener('mousemove', (e) => { if (isDrawing) handleInput(e.clientX, e.clientY, true); });
+        window.addEventListener('mouseup', () => { isDrawing = false; });
 
-        // 2. 모바일/아이패드 터치 이벤트 호환
-        canvas.addEventListener('touchstart', function(e) {
-            e.preventDefault(); // 패드 화면이 울컥거리거나 밀리는 현상 방지
+        // 패드/모바일 터치용 이벤트 
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDrawing = true;
             const touch = e.touches[0];
-            handleInput(touch.clientX, touch.clientY);
+            handleInput(touch.clientX, touch.clientY, false);
         }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!isDrawing) return;
+            const touch = e.touches[0];
+            handleInput(touch.clientX, touch.clientY, true); // 드래그 중임을 나타내는 true 전달
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => { isDrawing = false; });
 
         function handleStep() {
             if (centroids.length === 0 || dataPoints.length === 0) {
