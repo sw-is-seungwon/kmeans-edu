@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨k-means 시뮬레이터✨</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f7f9fc;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 { color: #333; margin-bottom: 5px; }
+        .description { color: #666; font-size: 14px; margin-bottom: 25px; text-align: center; }
+        .container { display: flex; gap: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white; padding: 20px; border-radius: 12px; }
+        .control-panel { width: 250px; display: flex; flex-direction: column; gap: 15px; }
+        
+        /* 현재 진행 단계 표시 상단 바 */
+        .status-header {
+            width: 596px; padding: 12px; margin-bottom: 8px; border-radius: 8px;
+            background-color: #f1f5f9; text-align: center; font-weight: bold; font-size: 15px; color: #334155;
+            border: 1px solid #e2e8f0; transition: all 0.3s;
+        }
+        
+        canvas { border: 2px solid #e2e8f0; border-radius: 8px; cursor: crosshair; background-color: #fafbfc; }
+        .btn {
+            padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px;
+        }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-secondary { background-color: #10b981; color: white; }
+        .btn-secondary:hover { background-color: #059669; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .mode-select {
+            display: flex; flex-direction: column; gap: 8px; background: #f1f5f9; padding: 12px; border-radius: 8px;
+        }
+        label { font-size: 14px; font-weight: bold; color: #475569; }
+        .radio-group { display: flex; gap: 10px; margin-top: 5px; font-weight: normal; font-size: 13px;}
+    </style>
+</head>
+<body>
+
+    <h2>🏃‍♂️ 인공지능 k-means 시뮬레이터</h2>
+    <div class="description">알고리즘에 따라 중심점이 어떻게 이동하는지 실험해 봅시다!</div>
+
+    <div class="container">
+        <div>
+            <div class="status-header" id="statusHeader">📢 대기 중 (데이터와 중심점을 생성해 주세요)</div>
+            <canvas id="kmeansCanvas" width="600" height="500"></canvas>
+        </div>
+
+        <div class="control-panel">
+            <button class="btn btn-danger" onclick="resetAll()">🔄 처음부터 다시 (리셋)</button>
+            <button class="btn btn-secondary" onclick="generateRandomData()">📊 랜덤 데이터 생성</button>
+            
+            <div class="mode-select">
+                <label>📍 어떤 데이터를 생성할 건가요?</label>
+                <div class="radio-group">
+                    <input type="radio" id="modeData" name="clickMode" value="data" checked>
+                    <label for="modeData" style="font-weight:normal;">일반 데이터 점 찍기</label>
+                </div>
+                <div class="radio-group">
+                    <input type="radio" id="modeCentroid" name="clickMode" value="centroid">
+                    <label for="modeCentroid" style="font-weight:normal; color:#ef4444;">✨ 중심점 지정하기</label>
+                </div>
+            </div>
+
+            <div class="mode-select">
+                <label>🎯 중심점 지정 방식 설정</label>
+                <div class="radio-group">
+                    <input type="radio" id="initAnywhere" name="initMode" value="anywhere" checked>
+                    <label for="initAnywhere" style="font-weight:normal;">아무 빈 공간이나</label>
+                </div>
+                <div class="radio-group">
+                    <input type="radio" id="initOnData" name="initMode" value="ondata">
+                    <label for="initOnData" style="font-weight:normal;">기존 데이터 위에</label>
+                </div>
+            </div>
+
+            <button class="btn btn-primary" id="stepBtn" onclick="handleStep()">▶️ 단계 진행</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('kmeansCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let dataPoints = []; 
+        let centroids = [];  
+        const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']; 
+        
+        let currentSubStep = 0; 
+        let isConverged = false;
+
+        function resetAll() {
+            dataPoints = [];
+            centroids = [];
+            currentSubStep = 0;
+            isConverged = false;
+            document.getElementById('modeData').checked = true;
+            updateHeader("📢 대기 중 (데이터와 중심점을 생성해 주세요)", "#f1f5f9", "#334155");
+            draw();
+        }
+
+        function generateRandomData() {
+            resetAll();
+            const groups = [
+                {x: 150, y: 150}, {x: 450, y: 150}, {x: 300, y: 350}
+            ];
+            groups.forEach(g => {
+                for(let i=0; i<15; i++) {
+                    dataPoints.push({
+                        x: g.x + (Math.random() - 0.5) * 120,
+                        y: g.y + (Math.random() - 0.5) * 120,
+                        cluster: -1
+                    });
+                }
+            });
+            updateHeader("📊 랜덤 데이터 생성 완료! 중심점을 찍어주세요.", "#e0f2fe", "#0369a1");
+            draw();
+        }
+
+        canvas.addEventListener('click', function(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            const clickMode = document.querySelector('input[name="clickMode"]:checked').value;
+            const initMode = document.querySelector('input[name="initMode"]:checked').value;
+
+            if (clickMode === 'data') {
+                dataPoints.push({ x: x, y: y, cluster: -1 });
+                currentSubStep = 0;
+                isConverged = false;
+                updateHeader("📍 데이터 추가됨 (단계 진행을 누르면 처음부터 다시 정렬합니다)", "#f1f5f9", "#334155");
+                draw();
+            } else {
+                if (centroids.length >= colors.length) {
+                    alert("중심점은 최대 5개까지만 지원합니다.");
+                    return;
+                }
+
+                if (initMode === 'ondata') {
+                    if (dataPoints.length === 0) {
+                        alert("선택할 수 있는 데이터가 없습니다.");
+                        return;
+                    }
+                    let closest = null;
+                    let minDist = Infinity;
+                    dataPoints.forEach(p => {
+                        let dist = Math.hypot(p.x - x, p.y - y);
+                        if (dist < minDist && dist < 30) {
+                            minDist = dist;
+                            closest = p;
+                        }
+                    });
+
+                    if (closest) {
+                        if (centroids.some(c => c.x === closest.x && c.y === closest.y)) return;
+                        centroids.push({ x: closest.x, y: closest.y, color: colors[centroids.length] });
+                        updateHeader("🎯 기존 데이터 위치에 중심점 지정 완료!", "#fef3c7", "#b45309");
+                    } else {
+                        alert("기존 데이터 점의 위치를 정확히 클릭해 주세요!");
+                    }
+                } else {
+                    centroids.push({ x: x, y: y, color: colors[centroids.length] });
+                    updateHeader("🎯 빈 공간에 새로운 중심점 지정 완료!", "#fef3c7", "#b45309");
+                }
+                currentSubStep = 0;
+                isConverged = false;
+                draw();
+            }
+        });
+
+        function handleStep() {
+            if (centroids.length === 0 || dataPoints.length === 0) {
+                alert("데이터와 중심점이 모두 존재해야 합니다!");
+                return;
+            }
+            if (isConverged) {
+                updateHeader("✨ 알고리즘 완료 (최종 수렴 상태)", "#dcfce7", "#15803d");
+                return;
+            }
+
+            if (currentSubStep === 0) {
+                runAssignStep();
+            } else {
+                runMoveStep();
+            }
+        }
+
+        // [할당 단계]
+        function runAssignStep() {
+            let changed = false;
+            dataPoints.forEach(p => {
+                let minDist = Infinity;
+                let clusterIdx = -1;
+                centroids.forEach((c, idx) => {
+                    let dist = Math.hypot(p.x - c.x, p.y - c.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        clusterIdx = idx;
+                    }
+                });
+                if (p.cluster !== clusterIdx) {
+                    p.cluster = clusterIdx;
+                    changed = true;
+                }
+            });
+
+            draw();
+
+            if (!changed && dataPoints.every(p => p.cluster !== -1)) {
+                isConverged = true;
+                updateHeader("✨ [완료] 중심점 변경이 없으므로 알고리즘 최종 수렴!", "#dcfce7", "#15803d");
+            } else {
+                updateHeader("🔵 [1단계 완료] 가장 가까운 중심점으로 군집(색상) 할당", "#dbeafe", "#1d4ed8");
+                currentSubStep = 1; 
+            }
+        }
+
+        // [이동 단계]
+        function runMoveStep() {
+            centroids.forEach((c, idx) => {
+                let sumX = 0, sumY = 0, count = 0;
+                dataPoints.forEach(p => {
+                    if (p.cluster === idx) {
+                        sumX += p.x;
+                        sumY += p.y;
+                        count++;
+                    }
+                });
+
+                if (count > 0) {
+                    c.x = sumX / count;
+                    c.y = sumY / count;
+                }
+            });
+
+            draw();
+            updateHeader("🟢 [2단계 완료] 데이터들의 평균 위치(무게중심)로 중심점 이동", "#dcfce7", "#15803d");
+            currentSubStep = 0; 
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            dataPoints.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = p.cluster === -1 ? '#94a3b8' : centroids[p.cluster].color;
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            });
+
+            centroids.forEach(c => {
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+                ctx.shadowBlur = 6;
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 14, 0, 2 * Math.PI);
+                ctx.fillStyle = c.color;
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+        }
+
+        function updateHeader(msg, bgColor, textColor) {
+            const header = document.getElementById('statusHeader');
+            header.innerHTML = msg;
+            header.style.backgroundColor = bgColor;
+            header.style.color = textColor;
+        }
+
+        draw();
+    </script>
+</body>
+</html>
