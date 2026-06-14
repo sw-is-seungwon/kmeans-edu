@@ -18,7 +18,6 @@
         h2 { color: #333; margin-bottom: 5px; font-size: 1.5rem; }
         .description { color: #666; font-size: 13px; margin-bottom: 20px; text-align: center; }
         
-        /* 태블릿 화면에 맞춰 유연하게 배치되는 컨테이너 */
         .container { 
             display: flex; 
             flex-direction: row;
@@ -30,7 +29,6 @@
             max-width: 100%;
         }
         
-        /* 패드 세로 모드 대응을 위한 미디어 쿼리 */
         @media (max-width: 900px) {
             .container { flex-direction: column; align-items: center; }
             .control-panel { width: 100% !important; }
@@ -46,17 +44,15 @@
             border: 1px solid #e2e8f0; transition: all 0.3s;
         }
         
-        /* 캔버스 터치 영역 최적화 (터치 시 확대/돋보기 방지) */
         canvas { 
             border: 2px solid #e2e8f0; 
             border-radius: 8px; 
             background-color: #fafbfc; 
-            touch-action: none; /* 패드에서 화면이 스크롤되거나 튕기는 현상 방지 */
+            touch-action: none; 
             -webkit-user-select: none;
             user-select: none;
         }
         
-        /* 터치하기 편하게 버튼 크기 및 간격 조정 */
         .btn {
             padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px;
             -webkit-tap-highlight-color: transparent;
@@ -70,9 +66,20 @@
         }
         label { font-size: 13px; font-weight: bold; color: #475569; }
         .radio-group { display: flex; gap: 8px; margin-top: 3px; font-size: 13px; align-items: center;}
-        
-        /* 라디오 버튼도 손가락 터치가 잘 되도록 크기 소폭 키움 */
         input[type="radio"] { width: 16px; height: 16px; margin: 0; }
+
+        /* 📊 새로 추가된 실시간 데이터 통계창 스타일 */
+        .stats-panel {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 13px;
+            color: #334155;
+        }
+        .stats-title { font-weight: bold; margin-bottom: 8px; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+        .stats-row { display: flex; justify-content: space-between; margin-bottom: 5px; align-items: center; }
+        .color-badge { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 6px; }
     </style>
 </head>
 <body>
@@ -114,6 +121,16 @@
                 </div>
             </div>
 
+            <div class="stats-panel">
+                <div class="stats-title">📈 데이터 통계 현황</div>
+                <div class="stats-row" style="font-weight: bold; margin-bottom: 8px;">
+                    <span>총 데이터 수:</span> <span id="totalCount">0개</span>
+                </div>
+                <div id="clusterCounts">
+                    <div style="color: #94a3b8; font-style: italic;">중심점을 생성하면 군집별 카운트가 표시됩니다.</div>
+                </div>
+            </div>
+
             <button class="btn btn-primary" id="stepBtn" onclick="handleStep()">▶️ 단계 진행</button>
         </div>
     </div>
@@ -125,6 +142,7 @@
         let dataPoints = []; 
         let centroids = [];  
         const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']; 
+        const colorNames = ['빨간 군집', '파란 군집', '초록 군집', '노란 군집', '보라 군집'];
         
         let currentSubStep = 0; 
         let isConverged = false;
@@ -138,6 +156,7 @@
             isDrawing = false;
             document.getElementById('modeData').checked = true;
             updateHeader("📢 대기 중 (데이터와 중심점을 생성해 주세요)", "#f1f5f9", "#334155");
+            calculateStats();
             draw();
         }
 
@@ -156,14 +175,13 @@
                 }
             });
             updateHeader("📊 랜덤 데이터 생성 완료! 중심점을 찍어주세요.", "#e0f2fe", "#0369a1");
+            calculateStats();
             draw();
         }
 
-        // 공통 좌표 처리 함수 (isMoveEvent 매개변수 누락 및 중복 코드 해결)
         function handleInput(clientX, clientY, isMoveEvent = false) {
             const rect = canvas.getBoundingClientRect();
             
-            // CSS 크기와 캔버스 내부 해상도 비율 보정
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
 
@@ -182,6 +200,7 @@
                 currentSubStep = 0;
                 isConverged = false;
                 updateHeader("📍 데이터 추가됨 (단계 진행을 누르면 처음부터 다시 정렬합니다)", "#f1f5f9", "#334155");
+                calculateStats();
                 draw();
             } else {
                 if (isMoveEvent) return;
@@ -218,6 +237,7 @@
                 }
                 currentSubStep = 0;
                 isConverged = false;
+                calculateStats();
                 draw();
             }
         }
@@ -280,6 +300,7 @@
                 }
             });
 
+            calculateStats(); // 할당 직후 개수 리카운트 반영
             draw();
 
             if (!changed && dataPoints.every(p => p.cluster !== -1)) {
@@ -312,6 +333,50 @@
             draw();
             updateHeader("🟢 [2단계 완료] 데이터들의 평균 위치(무게중심)로 중심점 이동", "#dcfce7", "#15803d");
             currentSubStep = 0; 
+        }
+
+        // 📊 개수 실시간 집계 및 HTML 반영 함수
+        function calculateStats() {
+            document.getElementById('totalCount').innerText = `${dataPoints.length}개`;
+            
+            const container = document.getElementById('clusterCounts');
+            if (centroids.length === 0) {
+                container.innerHTML = `<div style="color: #94a3b8; font-style: italic;">중심점을 생성하면 군집별 카운트가 표시됩니다.</div>`;
+                return;
+            }
+
+            // 군집별 개수 0으로 초기화
+            let counts = Array(centroids.length).fill(0);
+            let unassigned = 0;
+
+            dataPoints.forEach(p => {
+                if (p.cluster >= 0 && p.cluster < centroids.length) {
+                    counts[p.cluster]++;
+                } else {
+                    unassigned++;
+                }
+            });
+
+            let html = '';
+            centroids.forEach((c, idx) => {
+                html += `
+                    <div class="stats-row">
+                        <span><span class="color-badge" style="background:${c.color};"></span>${colorNames[idx]}:</span>
+                        <strong>${counts[idx]}개</strong>
+                    </div>
+                `;
+            });
+
+            if (unassigned > 0) {
+                html += `
+                    <div class="stats-row" style="color: #94a3b8;">
+                        <span><span class="color-badge" style="background:#94a3b8;"></span>미분류 데이터:</span>
+                        <strong>${unassigned}개</strong>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
         }
 
         function draw() {
@@ -353,7 +418,7 @@
             header.style.color = textColor;
         }
 
-        draw();
+        resetAll();
     </script>
 </body>
 </html>
