@@ -12,35 +12,70 @@
             align-items: center;
             background-color: #f7f9fc;
             margin: 0;
-            padding: 20px;
+            padding: 15px;
+	   -webkit-overflow-scrolling: touch;
         }
-        h2 { color: #333; margin-bottom: 5px; }
-        .description { color: #666; font-size: 14px; margin-bottom: 25px; text-align: center; }
+        h2 { color: #333; margin-bottom: 5px; font-size: 1.5rem; }
+        .description { color: #666; font-size: 13px; margin-bottom: 20px; text-align: center; }
         .container { display: flex; gap: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white; padding: 20px; border-radius: 12px; }
         .control-panel { width: 250px; display: flex; flex-direction: column; gap: 15px; }
         
-        /* 현재 진행 단계 표시 상단 바 */
+/* 태블릿 화면에 맞춰 유연하게 배치되는 컨테이너 */
+        .container { 
+            display: flex; 
+            flex-direction: row;
+            gap: 15px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+            background: white; 
+            padding: 15px; 
+            border-radius: 12px;
+            max-width: 100%;
+        }
+        
+        /* 패드 세로 모드 대응을 위한 미디어 쿼리 */
+        @media (max-width: 900px) {
+            .container { flex-direction: column; align-items: center; }
+            .control-panel { width: 100% !important; }
+            .status-header { width: 100% !important; box-sizing: border-box; }
+            canvas { width: 100% !important; height: auto !important; }
+        }
+
+        .control-panel { width: 230px; display: flex; flex-direction: column; gap: 12px; }
+        
         .status-header {
             width: 596px; padding: 12px; margin-bottom: 8px; border-radius: 8px;
-            background-color: #f1f5f9; text-align: center; font-weight: bold; font-size: 15px; color: #334155;
+            background-color: #f1f5f9; text-align: center; font-weight: bold; font-size: 14px; color: #334155;
             border: 1px solid #e2e8f0; transition: all 0.3s;
         }
         
-        canvas { border: 2px solid #e2e8f0; border-radius: 8px; cursor: crosshair; background-color: #fafbfc; }
+        /* 캔버스 터치 영역 최적화 (터치 시 확대/돋보기 방지) */
+        canvas { 
+            border: 2px solid #e2e8f0; 
+            border-radius: 8px; 
+            background-color: #fafbfc; 
+            touch-action: none; /* 패드에서 화면이 스크롤되거나 튕기는 현상 방지 */
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        /* 터치하기 편하게 버튼 크기 및 간격 조정 */
         .btn {
-            padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px;
+            padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px;
+            -webkit-tap-highlight-color: transparent;
         }
         .btn-primary { background-color: #3b82f6; color: white; }
-        .btn-primary:hover { background-color: #2563eb; }
         .btn-secondary { background-color: #10b981; color: white; }
-        .btn-secondary:hover { background-color: #059669; }
         .btn-danger { background-color: #ef4444; color: white; }
-        .btn-danger:hover { background-color: #dc2626; }
+        
         .mode-select {
             display: flex; flex-direction: column; gap: 8px; background: #f1f5f9; padding: 12px; border-radius: 8px;
         }
-        label { font-size: 14px; font-weight: bold; color: #475569; }
-        .radio-group { display: flex; gap: 10px; margin-top: 5px; font-weight: normal; font-size: 13px;}
+        label { font-size: 13px; font-weight: bold; color: #475569; }
+        .radio-group { display: flex; gap: 8px; margin-top: 3px; font-size: 13px; align-items: center;}
+        
+        /* 라디오 버튼도 손가락 터치가 잘 되도록 크기 소폭 키움 */
+        input[type="radio"] { width: 16px; height: 16px; margin: 0; }
+    </style>
     </style>
 </head>
 <body>
@@ -125,10 +160,16 @@
             draw();
         }
 
-        canvas.addEventListener('click', function(event) {
+    // 공통 좌표 처리 함수 (마우스 클릭과 터치 이벤트를 통합 계산)
+        function handleInput(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
+            
+            // CSS 크기와 캔버스 내부 해상도 비율 보정 (아이패드 반응형 대응)
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const x = (clientX - rect.left) * scaleX;
+            const y = (clientY - rect.top) * scaleY;
 
             const clickMode = document.querySelector('input[name="clickMode"]:checked').value;
             const initMode = document.querySelector('input[name="initMode"]:checked').value;
@@ -154,7 +195,8 @@
                     let minDist = Infinity;
                     dataPoints.forEach(p => {
                         let dist = Math.hypot(p.x - x, p.y - y);
-                        if (dist < minDist && dist < 30) {
+                        // 패드 환경에서는 손가락 터치 오차를 감안해 반경을 40으로 살짝 넓힘
+                        if (dist < minDist && dist < 40) {
                             minDist = dist;
                             closest = p;
                         }
@@ -165,7 +207,7 @@
                         centroids.push({ x: closest.x, y: closest.y, color: colors[centroids.length] });
                         updateHeader("🎯 기존 데이터 위치에 중심점 지정 완료!", "#fef3c7", "#b45309");
                     } else {
-                        alert("기존 데이터 점의 위치를 정확히 클릭해 주세요!");
+                        alert("데이터 점 위나 그 근처를 정확하게 터치해 주세요!");
                     }
                 } else {
                     centroids.push({ x: x, y: y, color: colors[centroids.length] });
@@ -175,7 +217,19 @@
                 isConverged = false;
                 draw();
             }
+        }
+
+        // 1. PC 마우스 클릭 이벤트 호환
+        canvas.addEventListener('click', function(e) {
+            handleInput(e.clientX, e.clientY);
         });
+
+        // 2. 모바일/아이패드 터치 이벤트 호환
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault(); // 패드 화면이 울컥거리거나 밀리는 현상 방지
+            const touch = e.touches[0];
+            handleInput(touch.clientX, touch.clientY);
+        }, { passive: false });
 
         function handleStep() {
             if (centroids.length === 0 || dataPoints.length === 0) {
