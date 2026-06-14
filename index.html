@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>✨k-means 시뮬레이터✨</title>
     <style>
         body {
@@ -13,14 +13,12 @@
             background-color: #f7f9fc;
             margin: 0;
             padding: 15px;
-	   -webkit-overflow-scrolling: touch;
+            -webkit-overflow-scrolling: touch;
         }
         h2 { color: #333; margin-bottom: 5px; font-size: 1.5rem; }
         .description { color: #666; font-size: 13px; margin-bottom: 20px; text-align: center; }
-        .container { display: flex; gap: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white; padding: 20px; border-radius: 12px; }
-        .control-panel { width: 250px; display: flex; flex-direction: column; gap: 15px; }
         
-/* 태블릿 화면에 맞춰 유연하게 배치되는 컨테이너 */
+        /* 태블릿 화면에 맞춰 유연하게 배치되는 컨테이너 */
         .container { 
             display: flex; 
             flex-direction: row;
@@ -76,7 +74,6 @@
         /* 라디오 버튼도 손가락 터치가 잘 되도록 크기 소폭 키움 */
         input[type="radio"] { width: 16px; height: 16px; margin: 0; }
     </style>
-    </style>
 </head>
 <body>
 
@@ -97,11 +94,11 @@
                 <label>📍 어떤 데이터를 생성할 건가요?</label>
                 <div class="radio-group">
                     <input type="radio" id="modeData" name="clickMode" value="data" checked>
-                    <label for="modeData" style="font-weight:normal;">일반 데이터 점 찍기</label>
+                    <label for="modeData">일반 데이터 점 찍기</label>
                 </div>
                 <div class="radio-group">
                     <input type="radio" id="modeCentroid" name="clickMode" value="centroid">
-                    <label for="modeCentroid" style="font-weight:normal; color:#ef4444;">✨ 중심점 지정하기</label>
+                    <label for="modeCentroid" style="color:#ef4444;">✨ 중심점 지정하기</label>
                 </div>
             </div>
 
@@ -109,11 +106,11 @@
                 <label>🎯 중심점 지정 방식 설정</label>
                 <div class="radio-group">
                     <input type="radio" id="initAnywhere" name="initMode" value="anywhere" checked>
-                    <label for="initAnywhere" style="font-weight:normal;">아무 빈 공간이나</label>
+                    <label for="initAnywhere">아무 빈 공간이나</label>
                 </div>
                 <div class="radio-group">
                     <input type="radio" id="initOnData" name="initMode" value="ondata">
-                    <label for="initOnData" style="font-weight:normal;">기존 데이터 위에</label>
+                    <label for="initOnData">기존 데이터 위에</label>
                 </div>
             </div>
 
@@ -131,12 +128,14 @@
         
         let currentSubStep = 0; 
         let isConverged = false;
-		let isDrawing = false;
+        let isDrawing = false;
+
         function resetAll() {
             dataPoints = [];
             centroids = [];
             currentSubStep = 0;
             isConverged = false;
+            isDrawing = false;
             document.getElementById('modeData').checked = true;
             updateHeader("📢 대기 중 (데이터와 중심점을 생성해 주세요)", "#f1f5f9", "#334155");
             draw();
@@ -160,13 +159,11 @@
             draw();
         }
 
-    // 공통 좌표 처리 함수 (마우스 클릭과 터치 이벤트를 통합 계산)
-        function handleInput(clientX, clientY) {
+        // 공통 좌표 처리 함수 (isMoveEvent 매개변수 누락 및 중복 코드 해결)
+        function handleInput(clientX, clientY, isMoveEvent = false) {
             const rect = canvas.getBoundingClientRect();
-			const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
             
-            // CSS 크기와 캔버스 내부 해상도 비율 보정 (아이패드 반응형 대응)
+            // CSS 크기와 캔버스 내부 해상도 비율 보정
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
 
@@ -177,7 +174,7 @@
             const initMode = document.querySelector('input[name="initMode"]:checked').value;
 
             if (clickMode === 'data') {
-				if (isMoveEvent && dataPoints.length > 0) {
+                if (isMoveEvent && dataPoints.length > 0) {
                     const lastPoint = dataPoints[dataPoints.length - 1];
                     if (Math.hypot(lastPoint.x - x, lastPoint.y - y) < 15) return; 
                 }
@@ -187,7 +184,7 @@
                 updateHeader("📍 데이터 추가됨 (단계 진행을 누르면 처음부터 다시 정렬합니다)", "#f1f5f9", "#334155");
                 draw();
             } else {
-				if (isMoveEvent) return;
+                if (isMoveEvent) return;
                 if (centroids.length >= colors.length) {
                     alert("중심점은 최대 5개까지만 지원합니다.");
                     return;
@@ -202,7 +199,6 @@
                     let minDist = Infinity;
                     dataPoints.forEach(p => {
                         let dist = Math.hypot(p.x - x, p.y - y);
-                        // 패드 환경에서는 손가락 터치 오차를 감안해 반경을 40으로 살짝 넓힘
                         if (dist < minDist && dist < 40) {
                             minDist = dist;
                             closest = p;
@@ -226,7 +222,7 @@
             }
         }
 
-		// PC 마우스용 이벤트
+        // PC 마우스용 이벤트
         canvas.addEventListener('mousedown', (e) => { isDrawing = true; handleInput(e.clientX, e.clientY, false); });
         canvas.addEventListener('mousemove', (e) => { if (isDrawing) handleInput(e.clientX, e.clientY, true); });
         window.addEventListener('mouseup', () => { isDrawing = false; });
@@ -243,7 +239,7 @@
             e.preventDefault();
             if (!isDrawing) return;
             const touch = e.touches[0];
-            handleInput(touch.clientX, touch.clientY, true); // 드래그 중임을 나타내는 true 전달
+            handleInput(touch.clientX, touch.clientY, true); 
         }, { passive: false });
 
         window.addEventListener('touchend', () => { isDrawing = false; });
